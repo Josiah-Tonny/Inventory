@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 </head>
 <body class="bg-gradient-to-br from-gray-800 to-gray-900 min-h-screen text-gray-100">
     <div class="max-w-6xl mx-auto p-6">
@@ -21,6 +22,10 @@
                     <button onclick="window.location.href='index.html'" class="flex items-center px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition duration-200">
                         <i class="fas fa-arrow-left mr-2"></i>
                         Back
+                    </button>
+                    <button onclick="resetData()" class="flex items-center px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition duration-200">
+                        <i class="fas fa-trash mr-2"></i>
+                        Reset Data
                     </button>
                     <button onclick="exportExcel()" class="flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition duration-200">
                         <i class="fas fa-file-excel mr-2"></i>
@@ -88,23 +93,17 @@
     <script>
         let assets = [];
 
-        // Load assets from JSON file
-        async function loadAssets() {
+        // Load assets from localStorage
+        function loadAssets() {
             try {
-                const response = await fetch('data.json');
-                const data = await response.json();
-                assets = data.assets || [];
+                assets = JSON.parse(localStorage.getItem('assets')) || [];
                 renderTable(assets);
                 document.querySelector('#filterStatus').textContent = `Showing all ${assets.length} assets`;
             } catch (error) {
                 console.error('Error loading assets:', error);
-                // Fallback to localStorage
-                const storedAssets = localStorage.getItem('assets');
-                if (storedAssets) {
-                    assets = JSON.parse(storedAssets);
-                    renderTable(assets);
-                    document.querySelector('#filterStatus').textContent = `Showing all ${assets.length} assets`;
-                }
+                assets = [];
+                renderTable(assets);
+                document.querySelector('#filterStatus').textContent = 'Showing 0 assets';
             }
         }
 
@@ -241,21 +240,139 @@
 
         // Export to PDF
         function exportPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            doc.setFontSize(12);
-            doc.text('Company Name', 10, 10);
-            doc.text('Email: info@company.com | PO Box: 12345 | Telephone: +123456789', 10, 20);
-            doc.text('IT Asset Inventory', 10, 30);
-            let y = 40;
-            assets.forEach(asset => {
-                doc.text(
-                    `Asset No: ${asset.asset_no}, Type: ${asset.asset_type}, Serial: ${asset.serial_number}, Manufacturer: ${asset.manufacturer}, Model: ${asset.model}, Version: ${asset.version}, Status: ${asset.status}, Date: ${asset.date}`,
-                    10, y
-                );
-                y += 10;
-            });
-            doc.save('inventory.pdf');
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('l', 'mm', 'a4'); // landscape orientation
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+
+                // Add header background
+                doc.setFillColor(48, 48, 48);
+                doc.rect(0, 0, pageWidth, 40, 'F');
+
+                // Header text
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(24);
+                doc.text('IT Asset Inventory Report', pageWidth/2, 20, { align: 'center' });
+
+                // Company details in header
+                doc.setFontSize(12);
+                const today = new Date().toLocaleDateString();
+                doc.text(`Generated on: ${today}`, pageWidth - 20, 15, { align: 'right' });
+                doc.text('Mwalimu National Sacco', 15, 15);
+                doc.text('P.O. BOX 62641 City Square', 15, 25);
+                doc.text('Tel: +25 020 295 6000', 15, 35);
+                doc.text('www.mwalimunational.coop', pageWidth - 20, 35, { align: 'right' });
+
+                // Table configuration
+                const headers = [['Asset No', 'Asset Type', 'Serial Number', 'Manufacturer', 'Model', 'Version', 'Status', 'Date']];
+                const data = assets.map(asset => [
+                    asset.asset_no,
+                    asset.asset_type,
+                    asset.serial_number,
+                    asset.manufacturer,
+                    asset.model,
+                    asset.version,
+                    asset.status,
+                    asset.date
+                ]);
+
+                // Table styles
+                const styles = {
+                    headStyles: {
+                        fillColor: [66, 139, 202],
+                        textColor: 255,
+                        fontSize: 10,
+                        halign: 'center'
+                    },
+                    bodyStyles: {
+                        fontSize: 9,
+                        textColor: 50
+                    },
+                    alternateRowStyles: {
+                        fillColor: [245, 245, 245]
+                    },
+                    columnStyles: {
+                        0: { cellWidth: 25 },
+                        1: { cellWidth: 30 },
+                        2: { cellWidth: 35 },
+                        3: { cellWidth: 35 },
+                        4: { cellWidth: 35 },
+                        5: { cellWidth: 20 },
+                        6: { cellWidth: 30 },
+                        7: { cellWidth: 25 }
+                    },
+                    margin: { top: 45 }
+                };
+
+                // Generate table
+                doc.autoTable({
+                    head: headers,
+                    body: data,
+                    ...styles,
+                    didDrawPage: function(data) {
+                        // Add page number at the bottom
+                        doc.setFontSize(10);
+                        doc.setTextColor(100);
+                        doc.text(
+                            `Page ${doc.internal.getCurrentPageInfo().pageNumber} of ${doc.internal.getNumberOfPages()}`,
+                            pageWidth/2,
+                            pageHeight - 10,
+                            { align: 'center' }
+                        );
+                    }
+                });
+
+                // Add summary section
+                const lastPage = doc.internal.getNumberOfPages();
+                doc.setPage(lastPage);
+
+                // Summary box
+                const summary = {
+                    total: assets.length,
+                    good: assets.filter(a => a.status === 'Good').length,
+                    bad: assets.filter(a => a.status === 'Bad').length,
+                    replacement: assets.filter(a => a.status === 'Needed Replacement').length,
+                    upgrade: assets.filter(a => a.status === 'Needs Upgrade').length
+                };
+
+                const yPos = doc.lastAutoTable.finalY + 20;
+
+                // Summary title
+                doc.setFontSize(14);
+                doc.setTextColor(50);
+                doc.text('Asset Summary', 15, yPos);
+
+                // Summary content
+                doc.setFontSize(10);
+                doc.text([
+                    `Total Assets: ${summary.total}`,
+                    `Good Condition: ${summary.good}`,
+                    `Bad Condition: ${summary.bad}`,
+                    `Needs Replacement: ${summary.replacement}`,
+                    `Needs Upgrade: ${summary.upgrade}`
+                ], 15, yPos + 10);
+
+                // Save the PDF
+                doc.save('IT_Asset_Inventory.pdf');
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                alert('There was an error generating the PDF. Please try again.');
+            }
+        }
+
+        // Reset all data
+        function resetData() {
+            if (confirm('Are You Sure you want to delete the whole Data?')) {
+                localStorage.removeItem('assets');
+                assets = [];
+                renderTable(assets);
+                document.querySelector('#filterStatus').textContent = 'Showing 0 assets';
+                // Reset filter inputs
+                document.getElementById('filterDate').value = '';
+                document.getElementById('filterWeek').value = '';
+                document.getElementById('filterMonth').value = '';
+            }
         }
 
         // Initial load
