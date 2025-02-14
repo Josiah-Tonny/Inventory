@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Details</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-800 to-gray-900 min-h-screen text-gray-100">
+    <div class="max-w-6xl mx-auto p-6">
+        <div class="bg-gray-700 rounded-lg shadow-lg p-8 mb-8">
+            <div class="flex flex-col md:flex-row items-center justify-between mb-8">
+                <h1 class="text-4xl font-bold text-gray-100">
+                    <i class="fas fa-laptop-code mr-3 text-blue-400"></i>
+                    Asset Details
+                </h1>
+                <div class="flex space-x-4 mt-4 md:mt-0">
+                    <button onclick="window.location.href='index.html'" class="flex items-center px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition duration-200">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        Back
+                    </button>
+                    <button onclick="resetData()" class="flex items-center px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition duration-200">
+                        <i class="fas fa-trash mr-2"></i>
+                        Reset Data
+                    </button>
+                    <button onclick="exportExcel()" class="flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition duration-200">
+                        <i class="fas fa-file-excel mr-2"></i>
+                        Export Excel
+                    </button>
+                    <button onclick="exportPDF()" class="flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition duration-200">
+                        <i class="fas fa-file-pdf mr-2"></i>
+                        Export PDF
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filter Options -->
+            <div class="mb-8 bg-gray-600 p-6 rounded-lg">
+                <h2 class="text-xl font-semibold mb-4 text-gray-100">Filter Assets</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-gray-300">Date</label>
+                        <input type="date" id="filterDate" class="w-full p-2 border border-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-gray-100 transition">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-gray-300">Week</label>
+                        <input type="week" id="filterWeek" class="w-full p-2 border border-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-gray-100 transition">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-sm font-medium text-gray-300">Month</label>
+                        <input type="month" id="filterMonth" class="w-full p-2 border border-gray-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-700 text-gray-100 transition">
+                    </div>
+                </div>
+                <button onclick="filterAssets()" class="mt-6 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition duration-200 flex items-center">
+                    <i class="fas fa-filter mr-2"></i>
+                    Filter
+                </button>
+                <div class="mt-4 text-sm text-gray-300" id="filterStatus">
+                    Showing all ${assets.length} assets
+                </div>
+                <button onclick="resetFilters()" class="mt-2 px-4 py-1 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition duration-200 text-sm">
+                    Clear Filters
+                </button>
+            </div>
+
+            <!-- Results Table -->
+            <div class="overflow-x-auto rounded-lg border border-gray-500">
+                <table id="resultsTable" class="w-full">
+                    <thead>
+                        <tr class="bg-gray-800 text-gray-100">
+                            <th class="px-4 py-3 text-left">Asset No</th>
+                            <th class="px-4 py-3 text-left">Asset Type</th>
+                            <th class="px-4 py-3 text-left">Serial Number</th>
+                            <th class="px-4 py-3 text-left">Manufacturer</th>
+                            <th class="px-4 py-3 text-left">Model</th>
+                            <th class="px-4 py-3 text-left">Version</th>
+                            <th class="px-4 py-3 text-left">Status</th>
+                            <th class="px-4 py-3 text-left">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Results will be populated here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let assets = [];
+
+        // Load assets from localStorage
+        function loadAssets() {
+            try {
+                assets = JSON.parse(localStorage.getItem('assets')) || [];
+                renderTable(assets);
+                document.querySelector('#filterStatus').textContent = `Showing all ${assets.length} assets`;
+            } catch (error) {
+                console.error('Error loading assets:', error);
+                assets = [];
+                renderTable(assets);
+                document.querySelector('#filterStatus').textContent = 'Showing 0 assets';
+            }
+        }
+
+        // Improved Week Number calculation with Monday to Friday support
+        function getWeekNumber(date) {
+            const target = new Date(date);
+            const firstDayOfYear = new Date(target.getFullYear(), 0, 1);
+            const daysSinceFirstDay = Math.floor((target - firstDayOfYear) / (24 * 60 * 60 * 1000));
+            return Math.ceil((daysSinceFirstDay + firstDayOfYear.getDay() + 1) / 7);
+        }
+
+        function isWithinWorkWeek(date, yearWeek, weekNum) {
+            const targetDate = new Date(date);
+            const day = targetDate.getDay();
+            // Check if it's a weekday (Monday = 1, Friday = 5)
+            if (day === 0 || day === 6) return false;
+            
+            const year = targetDate.getFullYear();
+            const week = getWeekNumber(targetDate);
+            return year === parseInt(yearWeek) && week === parseInt(weekNum);
+        }
+
+        // Format date for consistency
+        function formatDate(date) {
+            return new Date(date).toISOString().split('T')[0];
+        }
+
+        // Improved Filter Assets
+        function filterAssets() {
+            try {
+                const date = document.getElementById('filterDate').value;
+                const week = document.getElementById('filterWeek').value;
+                const month = document.getElementById('filterMonth').value;
+
+                let filteredAssets = [...assets];
+
+                if (date || week || month) {
+                    filteredAssets = filteredAssets.filter(asset => {
+                        if (!asset.date) return false;
+
+                        const assetDate = new Date(asset.date);
+                        
+                        // Date filter
+                        if (date && formatDate(asset.date) !== date) {
+                            return false;
+                        }
+
+                        // Week filter (Monday to Friday only)
+                        if (week) {
+                            const [yearWeek, weekNum] = week.split('-W');
+                            if (!isWithinWorkWeek(assetDate, yearWeek, weekNum)) {
+                                return false;
+                            }
+                        }
+
+                        // Month filter
+                        if (month) {
+                            const assetMonth = formatDate(asset.date).substring(0, 7);
+                            if (assetMonth !== month) {
+                                return false;
+                            }
+                        }
+
+                        return true;
+                    });
+                }
+
+                renderTable(filteredAssets);
+                
+                // Show filter status
+                const resultCount = filteredAssets.length;
+                const filterStatus = `Showing ${resultCount} of ${assets.length} assets`;
+                document.querySelector('#filterStatus').textContent = filterStatus;
+
+            } catch (error) {
+                console.error('Filter error:', error);
+                alert('There was an error applying the filters. Please check your input.');
+            }
+        }
+
+        // Add filter reset function
+        function resetFilters() {
+            document.getElementById('filterDate').value = '';
+            document.getElementById('filterWeek').value = '';
+            document.getElementById('filterMonth').value = '';
+            renderTable(assets);
+            document.querySelector('#filterStatus').textContent = `Showing all ${assets.length} assets`;
+        }
+
+        // Render Table
+        function renderTable(data) {
+            const tableBody = document.querySelector('#resultsTable tbody');
+            tableBody.innerHTML = data.map(asset => `
+                <tr class="border-t border-gray-600 hover:bg-gray-600 transition">
+                    <td class="px-4 py-3">${asset.asset_no}</td>
+                    <td class="px-4 py-3">${asset.asset_type}</td>
+                    <td class="px-4 py-3">${asset.serial_number}</td>
+                    <td class="px-4 py-3">${asset.manufacturer}</td>
+                    <td class="px-4 py-3">${asset.model}</td>
+                    <td class="px-4 py-3">${asset.version}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 rounded-full text-sm ${getStatusColor(asset.status)}">
+                            ${asset.status}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">${asset.date}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Get status color
+        function getStatusColor(status) {
+            switch (status) {
+                case 'Good':
+                    return 'bg-green-100 text-green-800';
+                case 'Bad':
+                    return 'bg-red-100 text-red-800';
+                case 'Needed Replacement':
+                    return 'bg-orange-100 text-orange-800';
+                case 'Needs Upgrade':
+                    return 'bg-yellow-100 text-yellow-800';
+                default:
+                    return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        // Export to Excel
+        function exportExcel() {
+            const ws = XLSX.utils.json_to_sheet(assets);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Assets');
+            XLSX.writeFile(wb, 'inventory.xlsx');
+        }
+
+        // Export to PDF
+        function exportPDF() {
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('l', 'mm', 'a4'); // landscape orientation
+                const pageWidth = doc.internal.pageSize.getWidth();
+                const pageHeight = doc.internal.pageSize.getHeight();
+
+                // Add header background
+                doc.setFillColor(48, 48, 48);
+                doc.rect(0, 0, pageWidth, 40, 'F');
+
+                // Header text
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(24);
+                doc.text('IT Asset Inventory Report', pageWidth/2, 20, { align: 'center' });
+
+                // Company details in header
+                doc.setFontSize(12);
+                const today = new Date().toLocaleDateString();
+                doc.text(`Generated on: ${today}`, pageWidth - 20, 15, { align: 'right' });
+                doc.text('Mwalimu National Sacco', 15, 15);
+                doc.text('P.O. BOX 62641 City Square', 15, 25);
+                doc.text('Tel: +25 020 295 6000', 15, 35);
+                doc.text('www.mwalimunational.coop', pageWidth - 20, 35, { align: 'right' });
+
+                // Table configuration
+                const headers = [['Asset No', 'Asset Type', 'Serial Number', 'Manufacturer', 'Model', 'Version', 'Status', 'Date']];
+                const data = assets.map(asset => [
+                    asset.asset_no,
+                    asset.asset_type,
+                    asset.serial_number,
+                    asset.manufacturer,
+                    asset.model,
+                    asset.version,
+                    asset.status,
+                    asset.date
+                ]);
+
+                // Table styles
+                const styles = {
+                    headStyles: {
+                        fillColor: [66, 139, 202],
+                        textColor: 255,
+                        fontSize: 10,
+                        halign: 'center'
+                    },
+                    bodyStyles: {
+                        fontSize: 9,
+                        textColor: 50
+                    },
+                    alternateRowStyles: {
+                        fillColor: [245, 245, 245]
+                    },
+                    columnStyles: {
+                        0: { cellWidth: 25 },
+                        1: { cellWidth: 30 },
+                        2: { cellWidth: 35 },
+                        3: { cellWidth: 35 },
+                        4: { cellWidth: 35 },
+                        5: { cellWidth: 20 },
+                        6: { cellWidth: 30 },
+                        7: { cellWidth: 25 }
+                    },
+                    margin: { top: 45 }
+                };
+
+                // Generate table
+                doc.autoTable({
+                    head: headers,
+                    body: data,
+                    ...styles,
+                    didDrawPage: function(data) {
+                        // Add page number at the bottom
+                        doc.setFontSize(10);
+                        doc.setTextColor(100);
+                        doc.text(
+                            `Page ${doc.internal.getCurrentPageInfo().pageNumber} of ${doc.internal.getNumberOfPages()}`,
+                            pageWidth/2,
+                            pageHeight - 10,
+                            { align: 'center' }
+                        );
+                    }
+                });
+
+                // Add summary section
+                const lastPage = doc.internal.getNumberOfPages();
+                doc.setPage(lastPage);
+
+                // Summary box
+                const summary = {
+                    total: assets.length,
+                    good: assets.filter(a => a.status === 'Good').length,
+                    bad: assets.filter(a => a.status === 'Bad').length,
+                    replacement: assets.filter(a => a.status === 'Needed Replacement').length,
+                    upgrade: assets.filter(a => a.status === 'Needs Upgrade').length
+                };
+
+                const yPos = doc.lastAutoTable.finalY + 20;
+
+                // Summary title
+                doc.setFontSize(14);
+                doc.setTextColor(50);
+                doc.text('Asset Summary', 15, yPos);
+
+                // Summary content
+                doc.setFontSize(10);
+                doc.text([
+                    `Total Assets: ${summary.total}`,
+                    `Good Condition: ${summary.good}`,
+                    `Bad Condition: ${summary.bad}`,
+                    `Needs Replacement: ${summary.replacement}`,
+                    `Needs Upgrade: ${summary.upgrade}`
+                ], 15, yPos + 10);
+
+                // Save the PDF
+                doc.save('IT_Asset_Inventory.pdf');
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                alert('There was an error generating the PDF. Please try again.');
+            }
+        }
+
+        // Reset all data
+        function resetData() {
+            if (confirm('Are You Sure you want to delete the whole Data?')) {
+                localStorage.removeItem('assets');
+                assets = [];
+                renderTable(assets);
+                document.querySelector('#filterStatus').textContent = 'Showing 0 assets';
+                // Reset filter inputs
+                document.getElementById('filterDate').value = '';
+                document.getElementById('filterWeek').value = '';
+                document.getElementById('filterMonth').value = '';
+            }
+        }
+
+        // Initial load
+        loadAssets();
+    </script>
+</body>
+</html>
