@@ -105,21 +105,15 @@
     <script>
         let assets = [];
 
-        // Load assets from JSON file
-        async function loadAssets() {
+        // Load assets from localStorage
+        function loadAssets() {
             try {
-                const response = await fetch('data.json');
-                const data = await response.json();
-                assets = data.assets || [];
+                assets = JSON.parse(localStorage.getItem('assets')) || [];
                 renderTable(assets);
             } catch (error) {
                 console.error('Error loading assets:', error);
-                // Fallback to localStorage if file access fails
-                const storedAssets = localStorage.getItem('assets');
-                if (storedAssets) {
-                    assets = JSON.parse(storedAssets);
-                    renderTable(assets);
-                }
+                assets = [];
+                renderTable(assets);
             }
         }
 
@@ -138,34 +132,20 @@
             };
 
             assets.push(asset);
-            // Save to localStorage as fallback
             localStorage.setItem('assets', JSON.stringify(assets));
             renderTable(assets);
             e.target.reset();
-            
-            // Download updated data.json
-            downloadJSON(assets);
         });
-
-        // Function to download updated JSON
-        function downloadJSON(assets) {
-            const data = { assets: assets };
-            const dataStr = JSON.stringify(data, null, 2);
-            const blob = new Blob([dataStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'data.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
 
         // Reset Form
         function resetForm() {
-            document.getElementById('assetForm').reset();
+            if (confirm('Are You Sure you want to delete the whole Data?')) {
+                document.getElementById('assetForm').reset();
+                // Clear localStorage and assets array
+                localStorage.removeItem('assets');
+                assets = [];
+                renderTable(assets);
+            }
         }
 
         // Search Assets
